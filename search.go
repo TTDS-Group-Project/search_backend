@@ -1,4 +1,4 @@
-package main
+package search_backend
 
 import (
 	"database/sql"
@@ -340,7 +340,7 @@ func RankedSearchComplete(search string) *[]string {
 		postings = append(postings, getPosting(term))
 	}
 
-	N := 1000
+	N := 1000 // TODO : query DB to get number of documents
 
 	scores_map := make(map[string]float64)
 

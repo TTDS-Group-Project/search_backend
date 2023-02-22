@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
+
 	"math"
 	"regexp"
 	"sort"
@@ -19,38 +19,58 @@ import (
 // pointer to DB
 var db *sql.DB
 
+type ArticleData struct {
+	id_doc      string
+	publication string
+	url         string
+	sentiment   string
+	author      string
+	abstract    string
+}
+
+/*
 func main() {
 	initDB()
 
-	posting := getPosting("apple")
+	posting := getPosting("morbi")
 	set := createSetFromPosting(posting)
 
-	posting1 := getPosting("cat")
+	posting1 := getPosting("diam")
 	set1 := createSetFromPosting(posting1)
 
 	result := ANDhelper(set, set1)
 
 	result = PhraseSearch(posting, posting1)
 
-	result = ProxitmitySearch(posting, posting1, 3)
+	categories := []string{"crime"}
+	sentiment := ""
+	start_date := ""
+	end_date := ""
+	author := ""
 
-	fmt.Println(result)
+	merge := true
 
-	list := make([]*map[string][]int, 0)
+	results := FilteredSearch(sentiment, author, categories, start_date, end_date, result, merge)
 
-	list = append(list, posting)
-	list = append(list, posting1)
-	list = append(list, posting1)
+	results = HydrateDocIDSet(set)
 
-	rank := RankedSearch(&list)
+	fmt.Println(set)
+	for _, result := range results {
+		fmt.Println(result)
+		fmt.Println("------------")
+	}
+
+	rank := RankedSearchComplete("sit eget donec")
 
 	fmt.Println(rank)
 
 }
 
+*/
+
 // Connect to the PostgreSQL database
 func initDB() {
-	connStr := "host=localhost port=5432 user=postgres password=* dbname=ttds sslmode=disable"
+	connStr := "host=34.78.135.69 port=5432 user=postgres password=ttds1234 dbname=articles sslmode=disable"
 	var err error
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
@@ -82,9 +102,124 @@ func preProcessTerm(term string) string {
 
 }
 
+// hydrate a set of docID with article content
+func HydrateDocIDSet(set *set.Set) []ArticleData {
+	var results []ArticleData
+
+	var HydrateDocID = func(docID interface{}) {
+		row := db.QueryRow("SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE id_doc = $1", docID)
+		var ad ArticleData
+		switch err := row.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err {
+		case sql.ErrNoRows:
+			break
+		case nil:
+			results = append(results, ad)
+			break
+		default:
+			break
+		}
+	}
+
+	set.Do(HydrateDocID)
+
+	return results
+}
+
+// hydrate a list of docIDs with article content
+func HydrateDocIDList(list *[]string) []ArticleData {
+	var results []ArticleData
+
+	var HydrateDocID = func(docID interface{}) {
+		row := db.QueryRow("SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE id_doc = $1", docID)
+		var ad ArticleData
+		switch err := row.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err {
+		case sql.ErrNoRows:
+			break
+		case nil:
+			results = append(results, ad)
+			break
+		default:
+			break
+		}
+	}
+
+	for docID := range *list {
+		HydrateDocID(docID)
+	}
+
+	return results
+}
+
+// run filtered search with parameters, additionaly can be supplied a set of doc IDs from a ranked or boolean search to merge with
+func FilteredSearch(sentiment string, author string, categories []string, start_date string, end_date string, boolean_results *set.Set, merge bool) []ArticleData {
+	conditions := make([]string, 0)
+	if sentiment != "" {
+		condition := "sentiment = '" + sentiment + "'"
+		conditions = append(conditions, condition)
+	}
+
+	if author != "" {
+		condition := "author = '" + author + "'"
+		conditions = append(conditions, condition)
+	}
+
+	/*
+		if publisher != "" {
+			condition := "publisher = '" + publisher + "'"
+			conditions = append(conditions, condition)
+		}
+	*/
+
+	if start_date != "" {
+		condition := "publication >= '" + start_date + "'"
+		conditions = append(conditions, condition)
+	}
+
+	if end_date != "" {
+		condition := "publication <= '" + end_date + "'"
+		conditions = append(conditions, condition)
+	}
+
+	if len(categories) != 0 {
+		for _, category := range categories {
+			conditions = append(conditions, category)
+		}
+	}
+
+	query := "SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE "
+	where_clause := strings.Join(conditions, " AND ")
+
+	query = query + where_clause
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	defer rows.Close()
+	var results []ArticleData
+	for rows.Next() {
+		var ad ArticleData
+		if err := rows.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err != nil {
+			return results
+		}
+		if !merge {
+			results = append(results, ad)
+		} else {
+			if boolean_results.Has(ad.id_doc) {
+				results = append(results, ad)
+			}
+		}
+	}
+
+	return results
+
+}
+
 // get posting from inverted index on DB, return as a map
 func getPosting(term string) *map[string][]int {
-	row := db.QueryRow("SELECT postings FROM inverted_index WHERE term = $1", term)
+	processed_term := preProcessTerm(term)
+	row := db.QueryRow("SELECT doc_pos FROM word_index WHERE word = $1", processed_term)
 
 	var posting_JSON []byte
 	posting := make(map[string][]int)
@@ -168,12 +303,49 @@ func ProxitmitySearch(left_posting *map[string][]int, right_posting *map[string]
 
 // ranked search for a list of postings
 func RankedSearch(postings *[]*map[string][]int) *[]string {
+
 	N := 1000
 
 	scores_map := make(map[string]float64)
 
 	// calculate weight for each document in each posting
 	for _, posting := range *postings {
+		for docID, occurences := range *posting {
+			term_frequency := (1 + math.Log10(float64(len(occurences))))
+			inv_doc_frequency := math.Log10(float64(N / len(*posting)))
+			weight := term_frequency * inv_doc_frequency
+			scores_map[docID] = scores_map[docID] + weight
+		}
+
+	}
+
+	// sort the documents based on the weight
+	docIDs := make([]string, 0, len(scores_map))
+	for docID := range scores_map {
+		docIDs = append(docIDs, docID)
+	}
+	sort.SliceStable(docIDs, func(i, j int) bool {
+		return scores_map[docIDs[i]] > scores_map[docIDs[j]]
+	})
+
+	return &docIDs
+}
+
+// ranked search for a string search
+func RankedSearchComplete(search string) *[]string {
+
+	search_terms := preProcessFreeTextSearch(search)
+	var postings []*map[string][]int
+	for _, term := range search_terms {
+		postings = append(postings, getPosting(term))
+	}
+
+	N := 1000
+
+	scores_map := make(map[string]float64)
+
+	// calculate weight for each document in each posting
+	for _, posting := range postings {
 		for docID, occurences := range *posting {
 			term_frequency := (1 + math.Log10(float64(len(occurences))))
 			inv_doc_frequency := math.Log10(float64(N / len(*posting)))

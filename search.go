@@ -17,7 +17,7 @@ import (
 )
 
 // pointer to DB
-var db *sql.DB
+var a *sql.DB
 
 type ArticleData struct {
 	id_doc      string
@@ -66,7 +66,7 @@ func main() {
 
 }
 
-*/
+
 
 // Connect to the PostgreSQL database
 func initDB() {
@@ -78,12 +78,14 @@ func initDB() {
 	}
 }
 
+*/
+
 // remove stop words and tokenize free text search
-func preProcessFreeTextSearch(search string) []string {
+func PreProcessFreeTextSearch(search string) []string {
 	stopWords := set.New()
 	filtered := []string{}
 	for _, term := range strings.Fields(search) {
-		processed_term := preProcessTerm(term)
+		processed_term := PreProcessTerm(term)
 		if !stopWords.Has(processed_term) {
 			filtered = append(filtered, processed_term)
 		}
@@ -93,7 +95,7 @@ func preProcessFreeTextSearch(search string) []string {
 }
 
 // process term and tokenise
-func preProcessTerm(term string) string {
+func PreProcessTerm(term string) string {
 	nonAlphanumericRegex := regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 	term = nonAlphanumericRegex.ReplaceAllString(term, "")
 	term = strings.ToLower(term)
@@ -103,7 +105,7 @@ func preProcessTerm(term string) string {
 }
 
 // hydrate a set of docID with article content
-func HydrateDocIDSet(set *set.Set) []ArticleData {
+func HydrateDocIDSet(set *set.Set, db *sql.DB) []ArticleData {
 	var results []ArticleData
 
 	var HydrateDocID = func(docID interface{}) {
@@ -126,7 +128,7 @@ func HydrateDocIDSet(set *set.Set) []ArticleData {
 }
 
 // hydrate a list of docIDs with article content
-func HydrateDocIDList(list *[]string) []ArticleData {
+func HydrateDocIDList(list *[]string, db *sql.DB) []ArticleData {
 	var results []ArticleData
 
 	var HydrateDocID = func(docID interface{}) {
@@ -151,7 +153,7 @@ func HydrateDocIDList(list *[]string) []ArticleData {
 }
 
 // run filtered search with parameters, additionaly can be supplied a set of doc IDs from a ranked or boolean search to merge with
-func FilteredSearch(sentiment string, author string, categories []string, start_date string, end_date string, boolean_results *set.Set, merge bool) []ArticleData {
+func FilteredSearch(sentiment string, author string, categories []string, start_date string, end_date string, boolean_results *set.Set, merge bool, db *sql.DB) []ArticleData {
 	conditions := make([]string, 0)
 	if sentiment != "" {
 		condition := "sentiment = '" + sentiment + "'"
@@ -217,8 +219,8 @@ func FilteredSearch(sentiment string, author string, categories []string, start_
 }
 
 // get posting from inverted index on DB, return as a map
-func getPosting(term string) *map[string][]int {
-	processed_term := preProcessTerm(term)
+func GetPosting(term string, db *sql.DB) *map[string][]int {
+	processed_term := PreProcessTerm(term)
 	row := db.QueryRow("SELECT doc_pos FROM word_index WHERE word = $1", processed_term)
 
 	var posting_JSON []byte
@@ -240,7 +242,7 @@ func getPosting(term string) *map[string][]int {
 }
 
 // create a set of documetn IDs from posting
-func createSetFromPosting(posting *map[string][]int) *set.Set {
+func CreateSetFromPosting(posting *map[string][]int) *set.Set {
 	set := set.New()
 	for doc_id := range *posting {
 		set.Insert(doc_id)
@@ -332,12 +334,12 @@ func RankedSearch(postings *[]*map[string][]int) *[]string {
 }
 
 // ranked search for a string search
-func RankedSearchComplete(search string) *[]string {
+func RankedSearchComplete(search string, db *sql.DB) *[]string {
 
-	search_terms := preProcessFreeTextSearch(search)
+	search_terms := PreProcessFreeTextSearch(search)
 	var postings []*map[string][]int
 	for _, term := range search_terms {
-		postings = append(postings, getPosting(term))
+		postings = append(postings, GetPosting(term, db))
 	}
 
 	N := 1000 // TODO : query DB to get number of documents

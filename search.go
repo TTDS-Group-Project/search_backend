@@ -1,4 +1,4 @@
-package github.com/TTDS-Group-Project/search_backend
+package search_backend
 
 import (
 	"database/sql"

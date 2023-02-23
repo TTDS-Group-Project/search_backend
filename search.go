@@ -145,7 +145,7 @@ func HydrateDocIDList(list *[]string, db *sql.DB) []ArticleData {
 		}
 	}
 
-	for docID := range *list {
+	for _, docID := range *list {
 		HydrateDocID(docID)
 	}
 

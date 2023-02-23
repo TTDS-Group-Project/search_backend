@@ -20,12 +20,12 @@ import (
 var a *sql.DB
 
 type ArticleData struct {
-	Id_doc      string `db:"id_doc "`
-	Publication string `db:"publication "`
-	Url         string `db:"url "`
-	Sentiment   string `db:"sentiment "`
-	Author      string `db:"author "`
-	Abstract    string `db:"abstract "`
+	Id_doc      string `db:"id_doc"`
+	Publication string `db:"publication"`
+	Url         string `db:"url"`
+	Sentiment   string `db:"sentiment"`
+	Author      string `db:"author"`
+	Abstract    string `db:"abstract"`
 }
 
 /*

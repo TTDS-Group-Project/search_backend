@@ -20,12 +20,12 @@ import (
 var a *sql.DB
 
 type ArticleData struct {
-	id_doc      string
-	publication string
-	url         string
-	sentiment   string
-	author      string
-	abstract    string
+	Id_doc      string `db:"id_doc "`
+	Publication string `db:"publication "`
+	Url         string `db:"url "`
+	Sentiment   string `db:"sentiment "`
+	Author      string `db:"author "`
+	Abstract    string `db:"abstract "`
 }
 
 /*
@@ -111,7 +111,7 @@ func HydrateDocIDSet(set *set.Set, db *sql.DB) []ArticleData {
 	var HydrateDocID = func(docID interface{}) {
 		row := db.QueryRow("SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE id_doc = $1", docID)
 		var ad ArticleData
-		switch err := row.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err {
+		switch err := row.Scan(&ad.Id_doc, &ad.Publication, &ad.Url, &ad.Sentiment, &ad.Author, &ad.Abstract); err {
 		case sql.ErrNoRows:
 			break
 		case nil:
@@ -134,7 +134,7 @@ func HydrateDocIDList(list *[]string, db *sql.DB) []ArticleData {
 	var HydrateDocID = func(docID interface{}) {
 		row := db.QueryRow("SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE id_doc = $1", docID)
 		var ad ArticleData
-		switch err := row.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err {
+		switch err := row.Scan(&ad.Id_doc, &ad.Publication, &ad.Url, &ad.Sentiment, &ad.Author, &ad.Abstract); err {
 		case sql.ErrNoRows:
 			break
 		case nil:
@@ -202,13 +202,13 @@ func FilteredSearch(sentiment string, author string, categories []string, start_
 	var results []ArticleData
 	for rows.Next() {
 		var ad ArticleData
-		if err := rows.Scan(&ad.id_doc, &ad.publication, &ad.url, &ad.sentiment, &ad.author, &ad.abstract); err != nil {
+		if err := rows.Scan(&ad.Id_doc, &ad.Publication, &ad.Url, &ad.Sentiment, &ad.Author, &ad.Abstract); err != nil {
 			return results
 		}
 		if !merge {
 			results = append(results, ad)
 		} else {
-			if boolean_results.Has(ad.id_doc) {
+			if boolean_results.Has(ad.Id_doc) {
 				results = append(results, ad)
 			}
 		}

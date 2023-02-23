@@ -1,4 +1,4 @@
-module search_backend
+module github.com/TTDS-Group-Project/search_backend
 
 go 1.20
 

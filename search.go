@@ -33,53 +33,68 @@ type ArticleData struct {
 }
 
 /*
+
 func main() {
-	initDB()
+	db := initDB()
 
-	posting := getPosting("morbi")
-	set := createSetFromPosting(posting)
+	posting := GetPosting("morbi", db)
+	//set := CreateSetFromPosting(posting)
 
-	posting1 := getPosting("diam")
-	set1 := createSetFromPosting(posting1)
+	posting1 := GetPosting("diam", db)
+	//set1 := CreateSetFromPosting(posting1)
 
-	result := ANDhelper(set, set1)
+	result := PhraseSearch(posting, posting1)
 
-	result = PhraseSearch(posting, posting1)
+	fmt.Println(result)
 
-	categories := []string{"crime"}
-	sentiment := ""
-	start_date := ""
-	end_date := ""
-	author := ""
+	/*
 
-	merge := true
+		fmt.Println(set)
+		for _, result := range results {
+			fmt.Println(result)
+			fmt.Println("------------")
+		}
 
-	results := FilteredSearch(sentiment, author, categories, start_date, end_date, result, merge)
 
-	results = HydrateDocIDSet(set)
 
-	fmt.Println(set)
-	for _, result := range results {
-		fmt.Println(result)
-		fmt.Println("------------")
-	}
+		categories := []string{"crime"}
+		sentiment := ""
+		start_date := ""
+		end_date := ""
+		author := ""
 
-	rank := RankedSearchComplete("sit eget donec")
+		merge := true
 
-	fmt.Println(rank)
+		results := FilteredSearch(sentiment, author, categories, start_date, end_date, result, merge)
+
+		results = HydrateDocIDSet(set)
+
+		fmt.Println(set)
+		for _, result := range results {
+			fmt.Println(result)
+			fmt.Println("------------")
+		}
+
+		rank := RankedSearchComplete("sit eget donec")
+
+		fmt.Println(rank)
+
 
 }
 
-
-
 // Connect to the PostgreSQL database
-func initDB() {
+func initDB() *sql.DB {
 	connStr := "host=34.78.135.69 port=5432 user=postgres password=ttds1234 dbname=articles sslmode=disable"
 	var err error
+	var db *sql.DB
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		panic(err)
+
 	}
+
+	return db
+
 }
 
 */
@@ -156,12 +171,44 @@ func HydrateDocIDList(list *[]string, db *sql.DB) []ArticleData {
 	return results
 }
 
+// hydrate a list of docIDs with article content with aset of filtered docIDs
+func HydrateDocIDListFiltered(list *[]string, db *sql.DB, filtered *set.Set) []ArticleData {
+	var results []ArticleData
+
+	var HydrateDocID = func(docID interface{}) {
+		row := db.QueryRow("SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE id_doc = $1", docID)
+		var ad ArticleData
+		switch err := row.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body); err {
+		case sql.ErrNoRows:
+			break
+		case nil:
+			if filtered.Has(ad.Id) {
+				results = append(results, ad)
+			}
+			break
+		default:
+			break
+		}
+	}
+
+	for _, docID := range *list {
+		HydrateDocID(docID)
+	}
+
+	return results
+}
+
 // run filtered search with parameters, additionaly can be supplied a set of doc IDs from a ranked or boolean search to merge with
-func FilteredSearch(sentiment string, author string, categories []string, start_date string, end_date string, boolean_results *set.Set, merge bool, db *sql.DB) []ArticleData {
+func FilteredSearch(sentiment []string, author string, categories []string, start_date string, end_date string, boolean_results *set.Set, merge bool, db *sql.DB) *[]ArticleData {
 	conditions := make([]string, 0)
-	if sentiment != "" {
-		condition := "sentiment = '" + sentiment + "'"
-		conditions = append(conditions, condition)
+
+	if len(sentiment) != 0 {
+		var sentiment_condition []string
+		for _, sentiment_type := range sentiment {
+			condition := "sentiment = '" + sentiment_type + "'"
+			sentiment_condition = append(sentiment_condition, condition)
+		}
+		conditions = append(conditions, strings.Join(sentiment_condition, " OR "))
 	}
 
 	if author != "" {
@@ -207,7 +254,7 @@ func FilteredSearch(sentiment string, author string, categories []string, start_
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body); err != nil {
-			return results
+			return &results
 		}
 		if !merge {
 			results = append(results, ad)
@@ -216,6 +263,71 @@ func FilteredSearch(sentiment string, author string, categories []string, start_
 				results = append(results, ad)
 			}
 		}
+	}
+
+	return &results
+
+}
+
+// run filtered search with parameters, and return a set of docIDs that can be merged and hydrated for ranked search
+func FilteredSearchSet(sentiment []string, author string, categories []string, start_date string, end_date string, db *sql.DB) *set.Set {
+	conditions := make([]string, 0)
+
+	if len(sentiment) != 0 {
+		var sentiment_condition []string
+		for _, sentiment_type := range sentiment {
+			condition := "sentiment = '" + sentiment_type + "'"
+			sentiment_condition = append(sentiment_condition, condition)
+		}
+		conditions = append(conditions, strings.Join(sentiment_condition, " OR "))
+	}
+
+	if author != "" {
+		condition := "author = '" + author + "'"
+		conditions = append(conditions, condition)
+	}
+
+	/*
+		if publisher != "" {
+			condition := "publisher = '" + publisher + "'"
+			conditions = append(conditions, condition)
+		}
+	*/
+
+	if start_date != "" {
+		condition := "publication >= '" + start_date + "'"
+		conditions = append(conditions, condition)
+	}
+
+	if end_date != "" {
+		condition := "publication <= '" + end_date + "'"
+		conditions = append(conditions, condition)
+	}
+
+	if len(categories) != 0 {
+		for _, category := range categories {
+			conditions = append(conditions, category)
+		}
+	}
+
+	query := "SELECT id_doc, publication, url, sentiment, author, abstract FROM doc_atts WHERE "
+	where_clause := strings.Join(conditions, " AND ")
+
+	query = query + where_clause
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	defer rows.Close()
+	results := set.New()
+	for rows.Next() {
+		var ad ArticleData
+		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body); err != nil {
+			return results
+		}
+		results.Insert(ad.Id)
 	}
 
 	return results
@@ -278,6 +390,70 @@ func PhraseSearch(left_posting *map[string][]int, right_posting *map[string][]in
 						results.Insert(docID)
 						break
 					}
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// phrase search for two postings using linear merge
+func PhraseSearchFast(left_posting *map[string][]int, right_posting *map[string][]int) *set.Set {
+
+	results := set.New()
+
+	if len(*left_posting) == 0 || len(*right_posting) == 0 {
+		return results
+	}
+
+	for docID, left_term_positions := range *left_posting {
+		if right_term_positions, present := (*right_posting)[docID]; present {
+			right_list_size := len(right_term_positions)
+			left_list_size := len(left_term_positions)
+			right_list_counter := 0
+			left_list_counter := 0
+			for right_list_counter < right_list_size && left_list_counter < left_list_size {
+				if right_term_positions[right_list_counter]-left_term_positions[left_list_counter] == 1 {
+					results.Insert(docID)
+					left_list_counter++
+					right_list_counter++
+				} else if left_term_positions[left_list_counter]+1 < right_term_positions[right_list_counter] {
+					left_list_counter++
+				} else {
+					right_list_counter++
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// proximity search for two postings using  linear merge
+func ProxitmitySearchFast(left_posting *map[string][]int, right_posting *map[string][]int, proximity int) *set.Set {
+
+	results := set.New()
+
+	if len(*left_posting) == 0 || len(*right_posting) == 0 {
+		return results
+	}
+
+	for docID, left_term_positions := range *left_posting {
+		if right_term_positions, present := (*right_posting)[docID]; present {
+			right_list_size := len(right_term_positions)
+			left_list_size := len(left_term_positions)
+			right_list_counter := 0
+			left_list_counter := 0
+			for right_list_counter < right_list_size && left_list_counter < left_list_size {
+				if math.Abs(float64(right_term_positions[right_list_counter]-left_term_positions[left_list_counter])) <= float64(proximity) {
+					results.Insert(docID)
+					left_list_counter++
+					right_list_counter++
+				} else if left_term_positions[left_list_counter] < right_term_positions[right_list_counter] {
+					left_list_counter++
+				} else {
+					right_list_counter++
 				}
 			}
 		}

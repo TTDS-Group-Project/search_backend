@@ -297,26 +297,33 @@ func HydrateDocIDListFast(list *[]string, limit int, db *sql.DB) *[]ArticleData 
 }
 
 // hydrate a list of docIDs with article content with aset of filtered docIDs
-func HydrateDocIDListFiltered(list *[]string, db *sql.DB, filtered *set.Set) []ArticleData {
+func HydrateDocIDListFilteredFast(list *[]string, limit int, db *sql.DB, filtered *set.Set) []ArticleData {
 	var results []ArticleData
 
-	var HydrateDocID = func(docID interface{}) {
-		row := db.QueryRow("SELECT udid, date, url, sentiment, abstract, publisher, image, category, title FROM attributes WHERE udid = $1", docID)
+	in_string := CreateSQLStringFromList(*list)
+
+	query := "SELECT udid, date, url, sentiment, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	ad_map := make(map[string]ArticleData)
+	defer rows.Close()
+	for rows.Next() {
 		var ad ArticleData
-		switch err := row.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err {
-		case sql.ErrNoRows:
-			break
-		case nil:
-			results = append(results, ad)
-			break
-		default:
-			break
+		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
+			continue
 		}
+		ad_map[ad.Id] = ad
 	}
 
 	for _, docID := range *list {
-		if filtered.Has(docID) {
-			HydrateDocID(docID)
+		if val, ok := ad_map[docID]; ok {
+			if filtered.Has(docID) {
+				results = append(results, val)
+			}
 		}
 	}
 

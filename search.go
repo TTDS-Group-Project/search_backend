@@ -524,7 +524,7 @@ func GetNotSetFromString(term string, db *sql.DB, limit int) *set.Set {
 func GetNotSetFromSet(not_set *set.Set, db *sql.DB, limit int) *set.Set {
 
 	results := set.New()
-	rows, err := db.Query("SELECT TOP " + strconv.FormatInt(int64(limit), 10) + " udid FROM attributes")
+	rows, err := db.Query("SELECT udid FROM attributes limit " + strconv.FormatInt(int64(limit), limit))
 	if err != nil {
 		return nil
 	}

@@ -3,6 +3,7 @@ package search_backend
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 
@@ -62,12 +63,10 @@ func main() {
 
 }
 
-func main1() {
+*/
+
+func mainx() {
 	db := initDB()
-
-	len := getArticleLen("pGNSvxOud3unew", db)
-
-	fmt.Println(len)
 
 	//posting := GetPosting("execut", db)
 	//posset := CreateSetFromPosting(posting)
@@ -89,84 +88,25 @@ func main1() {
 	categories := []string{}
 	publishers := []string{"go"}
 
-	temp := set.New()
+	//temp := set.New()
 
 	fil1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 1000, db)
 	fmt.Print(fil1)
 
 	fmt.Println("-------------")
-	posting1 := GetPosting("florida", db)
-	posting2 := GetPosting("shooting", db)
+	r := GetNotSetFromString("obama", db, 2000)
 
-	our := PhraseSearchFast(posting1, posting2)
+	fmt.Print(r.Len())
 
-	//our = ProxitmitySearchFast(posting1, posting2, 5)
+	res := HydrateDocIDSetFast(r, 20000, db)
 
-	fmt.Println(our)
-
-	rank := RankedSearchComplete("florida shooting", temp, db)
-
-	rankh := HydrateDocIDList(rank, 100, db)
-
-	rankh = HydrateDocIDListFiltered(rank, db, our)
-
-	fmt.Println(rankh)
-	fmt.Println("-------------")
-	fil := FilteredSearch(sentiment, authors, categories, publishers, datefrom, dateto, our, true, 10000, db)
-	for _, a := range *fil {
+	for _, a := range *res {
 		fmt.Println(a)
 	}
 
-	filrank := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 1000, db)
-	fmt.Println("-------------")
-
-	rankh = HydrateDocIDListFiltered(rank, db, filrank)
-
-	fmt.Println(rankh)
-
-	fmt.Println("-------------")
-
-	not := getNotSetFromString("florida", db, 1000)
-	fmt.Println(not)
-
-
-		fmt.Println(result)
-
-		set := getNotSetFromString("diam", db, 100)
-		fmt.Println(set)
-		fmt.Println(set.Len())
-
-		fmt.Println(HydrateDocIDSet(set, 20, db))
-
-		//set := getNotSetFromString("diam", db, 100)
-		//posting := GetPosting("diam", db)
-		set1 := CreateSetFromPosting(posting)
-
-		authors := []string{}
-		sentiment := []string{}
-		datefrom := "2000-01-01"
-		dateto := ""
-		categories := []string{}
-		publishers := []string{}
-
-		res := FilteredSearch(sentiment, authors, categories, publishers, datefrom, dateto, set1, true, 100, db)
-		for _, a := range *res {
-			fmt.Println(a)
-		}
-
-		//res1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 5, db)
-		//fmt.Println(res1)
-
-		//stopwords := set.New
-
-		//ranked := BM25RankedSearchComplete("Morbi Diam Cum", stopwords, db)
-		//fmt.Println("-------------------------------------------")
-		//disp := HydrateDocIDList(ranked, 50, db)
-		//fmt.Println(disp)
+	fmt.Println(len(*res))
 
 }
-
-*/
 
 // Connect to the PostgreSQL database
 func initDB() *sql.DB {
@@ -216,7 +156,7 @@ func PreProcessTerm(term string) string {
 }
 
 // hydrate a set of docID with article content
-func HydrateDocIDSet(udid_set *set.Set, limit int, db *sql.DB) []ArticleData {
+func HydrateDocIDSet(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleData {
 	var results []ArticleData
 
 	var HydrateDocID = func(docID interface{}) {
@@ -238,7 +178,7 @@ func HydrateDocIDSet(udid_set *set.Set, limit int, db *sql.DB) []ArticleData {
 
 	udid_set.Do(HydrateDocID)
 
-	return results
+	return &results
 }
 
 // hydrate a set of docID with article content
@@ -258,7 +198,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
-			return &results
+			continue
 		}
 		results = append(results, ad)
 	}

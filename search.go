@@ -106,6 +106,18 @@ func mainx() {
 
 	fmt.Println(len(*res))
 
+	stop := set.New()
+
+	ran := RankedSearchComplete("trump donald obama", stop, db)
+
+	hyd := HydrateDocIDListFast(ran, 2000, db)
+	fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	for _, a := range *hyd {
+		fmt.Println(a)
+	}
+
+	fmt.Println("----------")
+
 }
 
 // Connect to the PostgreSQL database
@@ -242,6 +254,46 @@ func HydrateDocIDList(list *[]string, limit int, db *sql.DB) []ArticleData {
 	}
 
 	return results
+}
+
+func CreateSQLStringFromList(all_docs []string) string {
+	list := []string{}
+	for _, doc := range all_docs {
+		list = append(list, "'"+doc+"'")
+	}
+	return "(" + strings.Join(list, ",") + ")"
+}
+
+// fast hydration for ranked docIDs
+func HydrateDocIDListFast(list *[]string, limit int, db *sql.DB) *[]ArticleData {
+	var results []ArticleData
+
+	in_string := CreateSQLStringFromList(*list)
+
+	query := "SELECT udid, date, url, sentiment, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	ad_map := make(map[string]ArticleData)
+	defer rows.Close()
+	for rows.Next() {
+		var ad ArticleData
+		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
+			continue
+		}
+		ad_map[ad.Id] = ad
+	}
+
+	for _, docID := range *list {
+		if val, ok := ad_map[docID]; ok {
+			results = append(results, val)
+		}
+	}
+
+	return &results
 }
 
 // hydrate a list of docIDs with article content with aset of filtered docIDs

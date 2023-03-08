@@ -241,6 +241,40 @@ func HydrateDocIDSet(udid_set *set.Set, limit int, db *sql.DB) []ArticleData {
 	return results
 }
 
+// hydrate a set of docID with article content
+func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleData {
+	var results []ArticleData
+
+	in_string := CreateSQLStringFromSet(udid_set)
+
+	query := "SELECT udid, date, url, sentiment, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var ad ArticleData
+		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
+			return &results
+		}
+	}
+
+	return &results
+}
+
+func CreateSQLStringFromSet(all_docs *set.Set) string {
+	list := []string{}
+	var addString = func(docID interface{}) {
+		list = append(list, docID.(string))
+	}
+
+	all_docs.Do(addString)
+	return "(" + strings.Join(list, ",") + ")"
+}
+
 // hydrate a list of docIDs with article content
 func HydrateDocIDList(list *[]string, limit int, db *sql.DB) []ArticleData {
 	var results []ArticleData

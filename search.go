@@ -260,6 +260,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
 			return &results
 		}
+		results = append(results, ad)
 	}
 
 	return &results

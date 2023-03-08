@@ -268,7 +268,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 func CreateSQLStringFromSet(all_docs *set.Set) string {
 	list := []string{}
 	var addString = func(docID interface{}) {
-		list = append(list, docID.(string))
+		list = append(list, "'"+docID.(string)+"'")
 	}
 
 	all_docs.Do(addString)

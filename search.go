@@ -478,7 +478,7 @@ func GetPosting(term string, db *sql.DB) *map[string][]int {
 }
 
 // get set of documents that do not contain a term (NOT), can supply limit
-func getNotSetFromString(term string, db *sql.DB, limit int) *set.Set {
+func GetNotSetFromString(term string, db *sql.DB, limit int) *set.Set {
 
 	results := set.New()
 	processed_term := PreProcessTerm(term)
@@ -521,7 +521,7 @@ func getNotSetFromString(term string, db *sql.DB, limit int) *set.Set {
 }
 
 // get set of documents by giving a set of documents that are negated (NOT), can supply limit
-func getNotSetFromSet(not_set *set.Set, db *sql.DB, limit int) *set.Set {
+func GetNotSetFromSet(not_set *set.Set, db *sql.DB, limit int) *set.Set {
 
 	results := set.New()
 	rows, err := db.Query("SELECT TOP " + strconv.FormatInt(int64(limit), 10) + " udid FROM attributes")

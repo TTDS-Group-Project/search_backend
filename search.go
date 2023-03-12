@@ -90,7 +90,7 @@ func mainx() {
 
 	//temp := set.New()
 
-	fil1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, db)
+	fil1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 100, db)
 	fmt.Print(fil1)
 
 	fmt.Println("-------------")
@@ -110,7 +110,7 @@ func mainx() {
 
 	ran := RankedSearchComplete("trump donald obama", stop, db)
 
-	hyd := HydrateDocIDListFast(ran, 2000, db)
+	hyd := HydrateDocIDListFast(ran, db)
 	fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 	for _, a := range *hyd {
 		fmt.Println(a)
@@ -167,32 +167,23 @@ func PreProcessTerm(term string) string {
 
 }
 
-// hydrate a set of docID with article content
-func HydrateDocIDSet(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleData {
-	var results []ArticleData
+func MergeBooleanWithFilters(udid_set *set.Set, filtered_set *set.Set) *[]string {
+	merge := udid_set.Intersection(filtered_set)
+	return SetToList(merge)
+}
 
-	var HydrateDocID = func(docID interface{}) {
-		if len(results) >= limit {
-			return
-		}
-		row := db.QueryRow("SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid = $1", docID)
-		var ad ArticleData
-		switch err := row.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err {
-		case sql.ErrNoRows:
-			break
-		case nil:
-			results = append(results, ad)
-			break
-		default:
-			break
+func MergeRankedWithFilters(udid_list *[]string, filtered_set *set.Set) *[]string {
+	merge := []string{}
+	for _, docID := range *udid_list {
+		if filtered_set.Has(docID) {
+			merge = append(merge, docID)
 		}
 	}
 
-	udid_set.Do(HydrateDocID)
-
-	return &results
+	return &merge
 }
 
+// NOT USED
 // hydrate a set of docID with article content
 func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleData {
 	var results []ArticleData
@@ -228,34 +219,6 @@ func CreateSQLStringFromSet(all_docs *set.Set) string {
 	return "(" + strings.Join(list, ",") + ")"
 }
 
-// hydrate a list of docIDs with article content
-func HydrateDocIDList(list *[]string, limit int, db *sql.DB) []ArticleData {
-	var results []ArticleData
-
-	var HydrateDocID = func(docID interface{}) {
-		row := db.QueryRow("SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid = $1", docID)
-		var ad ArticleData
-		switch err := row.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err {
-		case sql.ErrNoRows:
-			break
-		case nil:
-			results = append(results, ad)
-			break
-		default:
-			break
-		}
-	}
-
-	for _, docID := range *list {
-		HydrateDocID(docID)
-		if len(results) >= limit {
-			return results
-		}
-	}
-
-	return results
-}
-
 func CreateSQLStringFromList(all_docs []string) string {
 	list := []string{}
 	for _, doc := range all_docs {
@@ -264,13 +227,19 @@ func CreateSQLStringFromList(all_docs []string) string {
 	return "(" + strings.Join(list, ",") + ")"
 }
 
-// fast hydration for ranked docIDs
-func HydrateDocIDListFast(list *[]string, limit int, db *sql.DB) *[]ArticleData {
+// USE THIS ALL THE TIME
+// fast hydration for boolean or filtered or ranked docIDs
+// for plain boolean hydration, use helper to convert to list and slice and then use this
+// for plain ranked hydration, use this directly after slicing
+// for plain filtered hydration, use FilteredSearchList and slice and use this
+// for merging ranked or boolean with filters, use
+// MergeBooleanWithFilters or MergeRankedWithFilters and slice and pass into this
+func HydrateDocIDListFast(list *[]string, db *sql.DB) *[]ArticleData {
 	var results []ArticleData
 
 	in_string := CreateSQLStringFromList(*list)
 
-	query := "SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
+	query := "SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -296,6 +265,7 @@ func HydrateDocIDListFast(list *[]string, limit int, db *sql.DB) *[]ArticleData 
 	return &results
 }
 
+// NOT USED ANYMORE
 // hydrate a list of docIDs with article content with aset of filtered docIDs
 func HydrateDocIDListFilteredFast(list *[]string, limit int, db *sql.DB, filtered *set.Set) *[]ArticleData {
 	var results []ArticleData
@@ -330,6 +300,7 @@ func HydrateDocIDListFilteredFast(list *[]string, limit int, db *sql.DB, filtere
 	return &results
 }
 
+// NOT USED
 // run filtered search with parameters, additionaly can be supplied a set of doc IDs from a ranked or boolean search to merge with
 func FilteredSearch(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, boolean_results *set.Set, merge bool, limit int, db *sql.DB) *[]ArticleData {
 	conditions := make([]string, 0)
@@ -409,11 +380,10 @@ func FilteredSearch(sentiment []string, authors []string, categories []string, p
 	}
 
 	return &results
-
 }
 
-// run filtered search with parameters, and return a set of docIDs that can be merged and hydrated for ranked search
-func FilteredSearchSet(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, db *sql.DB) *set.Set {
+// run filtered search with parameters, and return a set of docIDs that can be merged
+func FilteredSearchSet(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, limit int, db *sql.DB) *set.Set {
 	conditions := make([]string, 0)
 
 	if len(sentiment) != 0 {
@@ -467,6 +437,8 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 
 	query = query + where_clause
 
+	//query = query + " limit " + strconv.Itoa(limit)
+
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil
@@ -483,7 +455,103 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 	}
 
 	return results
+}
 
+// run filtered search with parameters, and return a set of docIDs that can be merged and hydrated for ranked search
+func FilteredSearchList(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, limit int, db *sql.DB) *[]string {
+	conditions := make([]string, 0)
+
+	if len(sentiment) != 0 {
+		var sentiment_condition []string
+		for _, sentiment_type := range sentiment {
+			condition := "sentiment = '" + sentiment_type + "'"
+			sentiment_condition = append(sentiment_condition, condition)
+		}
+		conditions = append(conditions, "("+strings.Join(sentiment_condition, " OR ")+")")
+	}
+
+	if len(publishers) != 0 {
+		var publishers_condition []string
+		for _, publisher := range publishers {
+			condition := "publisher = '" + publisher + "'"
+			publishers_condition = append(publishers_condition, condition)
+		}
+		conditions = append(conditions, "("+strings.Join(publishers_condition, " OR ")+")")
+	}
+
+	if len(authors) != 0 {
+		var authors_condition []string
+		for _, author := range authors {
+			condition := "authors = '" + author + "'"
+			authors_condition = append(authors_condition, condition)
+		}
+		conditions = append(conditions, "("+strings.Join(authors_condition, " OR ")+")")
+	}
+
+	if datefrom != "" {
+		condition := "date >= '" + datefrom + "'"
+		conditions = append(conditions, "("+condition+")")
+	}
+
+	if dateto != "" {
+		condition := "date <= '" + dateto + "'"
+		conditions = append(conditions, "("+condition+")")
+	}
+
+	if len(categories) != 0 {
+		var categories_condition []string
+		for _, category_type := range categories {
+			condition := "category = '" + category_type + "'"
+			categories_condition = append(categories_condition, condition)
+		}
+		conditions = append(conditions, "("+strings.Join(categories_condition, " OR ")+")")
+	}
+
+	query := "SELECT udid FROM attributes WHERE "
+	where_clause := strings.Join(conditions, " AND ")
+
+	query = query + where_clause
+
+	//query = query + " limit " + strconv.Itoa(limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil
+	}
+
+	defer rows.Close()
+	results := []string{}
+	for rows.Next() {
+		var ad ArticleData
+		if err := rows.Scan(&ad.Id); err != nil {
+			continue
+		}
+		results = append(results, ad.Id)
+	}
+
+	return &results
+}
+
+func SetToList(input *set.Set) *[]string {
+	var results []string
+
+	var addToList = func(docID interface{}) {
+		results = append(results, docID.(string))
+	}
+
+	input.Do(addToList)
+
+	return &results
+}
+
+func ListToSet(input *[]string) *set.Set {
+	results := set.New()
+
+	for _, docID := range *input {
+		results.Insert(docID)
+	}
+
+	return results
 }
 
 // get posting from inverted index on DB, return as a map

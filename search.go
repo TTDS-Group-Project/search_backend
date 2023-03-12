@@ -704,6 +704,19 @@ func ProxitmitySearch(left_posting *map[string][]int, right_posting *map[string]
 	return results
 }
 
+func GetNumArticles(db *sql.DB) int {
+	row := db.QueryRow("SELECT count(1) FROM attributes")
+	var count RowCount
+	switch err := row.Scan(&count.count); err {
+	case sql.ErrNoRows:
+		return 0
+	case nil:
+		return count.count
+	default:
+		return 0
+	}
+}
+
 // tf idf ranked search for a string search
 func RankedSearchComplete(search string, stopwords *set.Set, db *sql.DB) *[]string {
 

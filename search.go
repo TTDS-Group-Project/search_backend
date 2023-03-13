@@ -192,6 +192,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 
 	rows, err := db.Query(query)
 	if err != nil {
+		log.Println("ERROR executing query " + query)
 		return nil
 	}
 
@@ -199,6 +200,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
+			log.Println("ERROR scanning row in HydrateDocIDSet, skipping")
 			continue
 		}
 		results = append(results, ad)
@@ -235,12 +237,17 @@ func CreateSQLStringFromList(all_docs []string) string {
 func HydrateDocIDListFast(list *[]string, db *sql.DB) *[]ArticleData {
 	var results []ArticleData
 
+	if len(*list) == 0 {
+		return &results
+	}
+
 	in_string := CreateSQLStringFromList(*list)
 
 	query := "SELECT udid, date, url, sentiment, author, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string
 
 	rows, err := db.Query(query)
 	if err != nil {
+		log.Println("ERROR executing query " + query)
 		return nil
 	}
 
@@ -249,6 +256,7 @@ func HydrateDocIDListFast(list *[]string, db *sql.DB) *[]ArticleData {
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
+			log.Println("ERROR scanning row in HydrateDocIDListFast skipping")
 			continue
 		}
 		ad_map[ad.Id] = ad
@@ -291,88 +299,6 @@ func HydrateDocIDListFilteredFast(list *[]string, limit int, db *sql.DB, filtere
 		if val, ok := ad_map[docID]; ok {
 			if filtered.Has(docID) {
 				results = append(results, val)
-			}
-		}
-	}
-
-	return &results
-}
-
-// NOT USED
-// run filtered search with parameters, additionaly can be supplied a set of doc IDs from a ranked or boolean search to merge with
-func FilteredSearch(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, boolean_results *set.Set, merge bool, limit int, db *sql.DB) *[]ArticleData {
-	conditions := make([]string, 0)
-
-	if len(sentiment) != 0 {
-		var sentiment_condition []string
-		for _, sentiment_type := range sentiment {
-			condition := "sentiment = '" + sentiment_type + "'"
-			sentiment_condition = append(sentiment_condition, condition)
-		}
-		conditions = append(conditions, "("+strings.Join(sentiment_condition, " OR ")+")")
-	}
-
-	if len(publishers) != 0 {
-		var publishers_condition []string
-		for _, publisher := range publishers {
-			condition := "publisher = '" + publisher + "'"
-			publishers_condition = append(publishers_condition, condition)
-		}
-		conditions = append(conditions, "("+strings.Join(publishers_condition, " OR ")+")")
-	}
-
-	if len(authors) != 0 {
-		var authors_condition []string
-		for _, author := range authors {
-			condition := "author = '" + author + "'"
-			authors_condition = append(authors_condition, condition)
-		}
-		conditions = append(conditions, "("+strings.Join(authors_condition, " OR ")+")")
-	}
-
-	if datefrom != "" {
-		condition := "date >= '" + datefrom + "'"
-		conditions = append(conditions, "("+condition+")")
-	}
-
-	if dateto != "" {
-		condition := "date <= '" + dateto + "'"
-		conditions = append(conditions, "("+condition+")")
-	}
-
-	if len(categories) != 0 {
-		var categories_condition []string
-		for _, category_type := range categories {
-			condition := "category = '" + category_type + "'"
-			categories_condition = append(categories_condition, condition)
-		}
-		conditions = append(conditions, "("+strings.Join(categories_condition, " OR ")+")")
-	}
-
-	query := "SELECT udid, date, url, sentiment, author, abstract, publisher, image, category, title FROM attributes WHERE "
-	where_clause := strings.Join(conditions, " AND ")
-
-	query = query + where_clause
-
-	query = query + " limit " + strconv.Itoa(limit)
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil
-	}
-
-	defer rows.Close()
-	var results []ArticleData
-	for rows.Next() {
-		var ad ArticleData
-		if err := rows.Scan(&ad.Id, &ad.Date, &ad.Link, &ad.Sentiment, &ad.Author, &ad.Body, &ad.Publisher, &ad.Cover_image, &ad.Category, &ad.Title); err != nil {
-			continue
-		}
-		if !merge {
-			results = append(results, ad)
-		} else {
-			if boolean_results.Has(ad.Id) {
-				results = append(results, ad)
 			}
 		}
 	}
@@ -439,6 +365,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 	results := set.New()
 	rows, err := db.Query(query)
 	if err != nil {
+		log.Println("ERROR executing query " + query)
 		return results
 	}
 
@@ -446,6 +373,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id); err != nil {
+			log.Println("ERROR scanning row in FilterSearc, skipping")
 			continue
 		}
 		results.Insert(ad.Id)
@@ -513,6 +441,7 @@ func FilteredSearchList(sentiment []string, authors []string, categories []strin
 
 	rows, err := db.Query(query)
 	if err != nil {
+		log.Println("ERROR executing query " + query)
 		return nil
 	}
 
@@ -521,6 +450,7 @@ func FilteredSearchList(sentiment []string, authors []string, categories []strin
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id); err != nil {
+			log.Println("ERROR scanning row in FilterSearc, skipping")
 			continue
 		}
 		results = append(results, ad.Id)

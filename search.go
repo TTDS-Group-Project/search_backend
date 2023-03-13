@@ -753,6 +753,8 @@ func ProxitmitySearchFast(left_posting *map[string][]int, right_posting *map[str
 	return results
 }
 
+func NWordPhraseSearch()
+
 // proximity search for two postings
 func ProxitmitySearch(left_posting *map[string][]int, right_posting *map[string][]int, proximity int) *set.Set {
 
@@ -833,7 +835,7 @@ func BM25RankedSearchComplete(search string, stopwords *set.Set, db *sql.DB) *[]
 	k := 1.2
 	b := 0.75
 
-	av_doclen := 150
+	av_doclen := 35
 
 	search_terms := PreProcessFreeTextSearch(search, stopwords)
 	var postings []*map[string][]int
@@ -855,7 +857,8 @@ func BM25RankedSearchComplete(search string, stopwords *set.Set, db *sql.DB) *[]
 		for docID, occurences := range *posting {
 			term_frequency := float64(len(occurences))
 			inv_doc_frequency := math.Log10(float64(N / len(*posting)))
-			doc_len := getArticleLen(docID, db)
+			//doc_len := getArticleLen(docID, db)
+			doc_len := 35
 			bm25 := ((term_frequency) * (k + 1)) / (term_frequency + k*(1-b+b*(float64(doc_len)/float64(av_doclen))))
 			weight := bm25 * inv_doc_frequency
 			scores_map[docID] = scores_map[docID] + weight

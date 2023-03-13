@@ -20,9 +20,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// pointer to DB
-var a *sql.DB
-
 type ArticleData struct {
 	Id          string `db:"udid"`
 	Date        string `db:"date"`
@@ -48,8 +45,7 @@ type Udid struct {
 	id_doc string
 }
 
-/*
-func main() {
+func mainr() {
 	db := initDB()
 
 	len := getArticleLen("pGNSvxOud3unew", db)
@@ -64,16 +60,14 @@ func main() {
 
 }
 
-*/
-
 func mainx() {
 	db := initDB()
 
-	//posting := GetPosting("execut", db)
-	//posset := CreateSetFromPosting(posting)
-	//set := CreateSetFromPosting(posting)
+	search := []string{"senior", "hamas", "leader", "ismail"}
+	res := NWordPhraseSearch(search, db)
 
-	//posting1 := GetPosting("diam", db)
+	fmt.Println(res)
+
 	//set1 := CreateSetFromPosting(posting1)
 
 	//result := PhraseSearch(posting, posting1)
@@ -81,49 +75,50 @@ func mainx() {
 	//res := HydrateDocIDSet(posset, 10, db)
 
 	//fmt.Println(res)
-	fmt.Println("-------------")
-	authors := []string{}
-	sentiment := []string{}
-	datefrom := ""
-	dateto := ""
-	categories := []string{}
-	publishers := []string{"go"}
 
-	//temp := set.New()
+	/*
+		fmt.Println("-------------")
+		authors := []string{}
+		sentiment := []string{}
+		datefrom := ""
+		dateto := ""
+		categories := []string{}
+		publishers := []string{"go"}
 
-	fil1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 100, db)
-	fmt.Print(fil1)
+		//temp := set.New()
 
-	fmt.Println("-------------")
-	r := GetNotSetFromString("obama", db, 2000)
+		fil1 := FilteredSearchSet(sentiment, authors, categories, publishers, datefrom, dateto, 10000, db)
 
-	fmt.Print(r.Len())
+		fil1
 
-	res := HydrateDocIDSetFast(r, 20000, db)
 
-	for _, a := range *res {
-		fmt.Println(a)
-	}
 
-	fmt.Println(len(*res))
 
-	stop := set.New()
 
-	ran := RankedSearchComplete("trump donald obama", stop, db)
 
-	hyd := HydrateDocIDListFast(ran, db)
-	fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-	for _, a := range *hyd {
-		fmt.Println(a)
-	}
+			query := "SELECT udid FROM attributes WHERE (publisher ='go')"
 
-	fmt.Println("----------")
+			rows, err := db.Query(query)
+			if err != nil {
+				return
+			}
+
+			defer rows.Close()
+			for rows.Next() {
+				var ad ArticleData
+				if err := rows.Scan(&ad.Publisher); err != nil {
+					continue
+				}
+				fmt.Println(ad.Publisher)
+			}
+
+	*/
 
 }
 
 // Connect to the PostgreSQL database
 func initDB() *sql.DB {
-	connStr := "host=34.76.187.212 port=5432 user=postgres password=ttds1234 dbname=v2 sslmode=disable"
+	connStr := "host=34.76.187.212 port=5432 user=postgres password=ttds1234 dbname=v4 sslmode=disable"
 	var err error
 	var db *sql.DB
 	db, err = sql.Open("postgres", connStr)
@@ -435,20 +430,19 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 		conditions = append(conditions, "("+strings.Join(categories_condition, " OR ")+")")
 	}
 
-	query := "SELECT udid FROM attributes WHERE "
+	query := "SELECT udid, publisher FROM attributes WHERE "
 	where_clause := strings.Join(conditions, " AND ")
 
 	query = query + where_clause
 
 	query = query + " limit " + strconv.Itoa(limit)
-
+	results := set.New()
 	rows, err := db.Query(query)
 	if err != nil {
-		return nil
+		return results
 	}
 
 	defer rows.Close()
-	results := set.New()
 	for rows.Next() {
 		var ad ArticleData
 		if err := rows.Scan(&ad.Id); err != nil {
@@ -720,6 +714,83 @@ func PhraseSearchFast(left_posting *map[string][]int, right_posting *map[string]
 	}
 
 	return results
+}
+
+// helper function
+func GetArticlesInAllTerms(postings *[]*map[string][]int) *set.Set {
+	init_set := set.New()
+	var list []*set.Set
+	for _, posting := range *postings {
+		posting_set := set.New()
+		for docID, _ := range *posting {
+			posting_set.Insert(docID)
+		}
+		init_set = posting_set
+		list = append(list, posting_set)
+
+	}
+
+	for _, temp := range list {
+		init_set = init_set.Intersection(temp)
+	}
+
+	return init_set
+
+}
+
+// N word phrase search for n words
+func NWordPhraseSearch(words []string, db *sql.DB) *set.Set {
+
+	var postings []*(map[string][]int)
+
+	for _, word := range words {
+		postings = append(postings, GetPosting(word, db))
+	}
+	relevant_docIDs := GetArticlesInAllTerms(&postings)
+
+	results := set.New()
+
+	rel_list := SetToList(relevant_docIDs)
+
+	for _, docID := range *rel_list {
+
+		temp := (postings)[0]
+		for _, start := range (*temp)[docID] {
+			if CheckForSequencePos(&postings, start, docID) {
+				results.Insert(docID)
+				break
+			}
+
+		}
+
+	}
+
+	return results
+
+}
+
+// helper function
+func CheckForSequencePos(postings *[]*map[string][]int, start_index int, docID string) bool {
+	curr_index := start_index
+	for _, posting := range *postings {
+		ok := false
+		occurences := (*posting)[docID]
+		for _, occ := range occurences {
+			if occ == curr_index {
+				ok = true
+				break
+			}
+		}
+
+		if !ok {
+			return false
+		}
+
+		curr_index = curr_index + 1
+
+	}
+
+	return true
 }
 
 // proximity search for two postings using  linear merge

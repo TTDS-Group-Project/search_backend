@@ -430,7 +430,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 		conditions = append(conditions, "("+strings.Join(categories_condition, " OR ")+")")
 	}
 
-	query := "SELECT udid, publisher FROM attributes WHERE "
+	query := "SELECT udid FROM attributes WHERE "
 	where_clause := strings.Join(conditions, " AND ")
 
 	query = query + where_clause

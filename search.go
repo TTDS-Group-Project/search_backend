@@ -440,7 +440,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 
 	query = query + where_clause
 
-	//query = query + " limit " + strconv.Itoa(limit)
+	query = query + " limit " + strconv.Itoa(limit)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -515,7 +515,7 @@ func FilteredSearchList(sentiment []string, authors []string, categories []strin
 
 	query = query + where_clause
 
-	//query = query + " limit " + strconv.Itoa(limit)
+	query = query + " limit " + strconv.Itoa(limit)
 
 	rows, err := db.Query(query)
 	if err != nil {

@@ -190,7 +190,7 @@ func HydrateDocIDSetFast(udid_set *set.Set, limit int, db *sql.DB) *[]ArticleDat
 
 	in_string := CreateSQLStringFromSet(udid_set)
 
-	query := "SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
+	query := "SELECT udid, date, url, sentiment, author, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string + " limit " + strconv.Itoa(limit)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -239,7 +239,7 @@ func HydrateDocIDListFast(list *[]string, db *sql.DB) *[]ArticleData {
 
 	in_string := CreateSQLStringFromList(*list)
 
-	query := "SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string
+	query := "SELECT udid, date, url, sentiment, author, abstract, publisher, image, category, title FROM attributes WHERE udid IN " + in_string
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -326,7 +326,7 @@ func FilteredSearch(sentiment []string, authors []string, categories []string, p
 	if len(authors) != 0 {
 		var authors_condition []string
 		for _, author := range authors {
-			condition := "authors = '" + author + "'"
+			condition := "author = '" + author + "'"
 			authors_condition = append(authors_condition, condition)
 		}
 		conditions = append(conditions, "("+strings.Join(authors_condition, " OR ")+")")
@@ -351,7 +351,7 @@ func FilteredSearch(sentiment []string, authors []string, categories []string, p
 		conditions = append(conditions, "("+strings.Join(categories_condition, " OR ")+")")
 	}
 
-	query := "SELECT udid, date, url, sentiment, authors, abstract, publisher, image, category, title FROM attributes WHERE "
+	query := "SELECT udid, date, url, sentiment, author, abstract, publisher, image, category, title FROM attributes WHERE "
 	where_clause := strings.Join(conditions, " AND ")
 
 	query = query + where_clause
@@ -407,7 +407,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 	if len(authors) != 0 {
 		var authors_condition []string
 		for _, author := range authors {
-			condition := "authors = '" + author + "'"
+			condition := "author = '" + author + "'"
 			authors_condition = append(authors_condition, condition)
 		}
 		conditions = append(conditions, "("+strings.Join(authors_condition, " OR ")+")")
@@ -457,7 +457,7 @@ func FilteredSearchSet(sentiment []string, authors []string, categories []string
 	return results
 }
 
-// run filtered search with parameters, and return a set of docIDs that can be merged and hydrated for ranked search
+// run filtered search with parameters, and return a list of docID to hydrate ONLY WHEN NO QUERY FROM USERS
 func FilteredSearchList(sentiment []string, authors []string, categories []string, publishers []string, datefrom string, dateto string, limit int, db *sql.DB) *[]string {
 	conditions := make([]string, 0)
 
@@ -482,7 +482,7 @@ func FilteredSearchList(sentiment []string, authors []string, categories []strin
 	if len(authors) != 0 {
 		var authors_condition []string
 		for _, author := range authors {
-			condition := "authors = '" + author + "'"
+			condition := "author = '" + author + "'"
 			authors_condition = append(authors_condition, condition)
 		}
 		conditions = append(conditions, "("+strings.Join(authors_condition, " OR ")+")")

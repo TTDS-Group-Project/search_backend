@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 
 	"math"
@@ -972,7 +973,11 @@ func QueryExpansionSearch(search string, stopwords *set.Set, n_d int, n_t int, d
 
 	search_terms := PreProcessFreeTextSearch(all_top_doc_text, stopwords)
 	term_postings := make(map[string](map[string][]int))
-	for _, term := range search_terms {
+	final_search_terms := []string{}
+	for i := 1; i < 10; i++ {
+		final_search_terms = append(final_search_terms, search_terms[rand.Intn(len(search_terms))])
+	}
+	for _, term := range final_search_terms {
 		term_postings[term] = *GetPosting(term, db)
 	}
 

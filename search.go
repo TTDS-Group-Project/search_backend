@@ -753,8 +753,6 @@ func ProxitmitySearchFast(left_posting *map[string][]int, right_posting *map[str
 	return results
 }
 
-func NWordPhraseSearch()
-
 // proximity search for two postings
 func ProxitmitySearch(left_posting *map[string][]int, right_posting *map[string][]int, proximity int) *set.Set {
 

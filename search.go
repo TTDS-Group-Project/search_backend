@@ -54,7 +54,7 @@ func mainr() {
 
 	temp := set.New()
 
-	qe := QueryExpansionSearch("florida shooting", temp, 5, 5, db)
+	qe := QueryExpansionSearchTFIDF("florida shooting", temp, 5, 5, db)
 
 	fmt.Println(*qe)
 
@@ -790,7 +790,7 @@ func GetNumArticles(db *sql.DB) int {
 }
 
 // tf idf ranked search for a string search
-func RankedSearchComplete(search string, stopwords *set.Set, db *sql.DB) *[]string {
+func TFIDFRankedSearchComplete(search string, stopwords *set.Set, db *sql.DB) *[]string {
 
 	search_terms := PreProcessFreeTextSearch(search, stopwords)
 	var postings []*map[string][]int
@@ -912,7 +912,7 @@ func getArticleText(doc_id string, db *sql.DB) string {
 
 // query expansion, returns list of new terms to add to search
 func QueryExpansion(search string, stopwords *set.Set, n_d int, n_t int, db *sql.DB) *[]string {
-	all_docs := RankedSearchComplete(search, stopwords, db)
+	all_docs := TFIDFRankedSearchComplete(search, stopwords, db)
 	top_docs := (*all_docs)[0:n_d]
 
 	top_doc_text := []string{}
@@ -961,8 +961,8 @@ func QueryExpansion(search string, stopwords *set.Set, n_d int, n_t int, db *sql
 
 }
 
-func QueryExpansionSearch(search string, stopwords *set.Set, n_d int, n_t int, db *sql.DB) *[]string {
-	all_docs := RankedSearchComplete(search, stopwords, db)
+func QueryExpansionSearchTFIDF(search string, stopwords *set.Set, n_d int, n_t int, db *sql.DB) *[]string {
+	all_docs := TFIDFRankedSearchComplete(search, stopwords, db)
 	top_docs := (*all_docs)[0:n_d]
 
 	top_doc_text := []string{}
@@ -1013,6 +1013,62 @@ func QueryExpansionSearch(search string, stopwords *set.Set, n_d int, n_t int, d
 
 	new_query := search + " " + strings.Join(res, " ")
 
-	return RankedSearchComplete(new_query, stopwords, db)
+	return TFIDFRankedSearchComplete(new_query, stopwords, db)
+
+}
+
+func QueryExpansionSearchBM25(search string, stopwords *set.Set, n_d int, n_t int, db *sql.DB) *[]string {
+	all_docs := BM25RankedSearchComplete(search, stopwords, db)
+	top_docs := (*all_docs)[0:n_d]
+
+	top_doc_text := []string{}
+	for _, doc_id := range top_docs {
+		top_doc_text = append(top_doc_text, getArticleText(doc_id, db))
+	}
+
+	all_top_doc_text := strings.Join(top_doc_text, " ")
+
+	search_terms := PreProcessFreeTextSearch(all_top_doc_text, stopwords)
+	term_postings := make(map[string](map[string][]int))
+	final_search_terms := []string{}
+	for i := 1; i < 10; i++ {
+		final_search_terms = append(final_search_terms, search_terms[rand.Intn(len(search_terms))])
+	}
+	for _, term := range final_search_terms {
+		term_postings[term] = *GetPosting(term, db)
+	}
+
+	row := db.QueryRow("SELECT count(1) FROM attributes")
+	var count RowCount
+	row.Scan(&count.count)
+
+	N := count.count // TODO : query DB to get number of documents
+
+	scores_map := make(map[string]float64)
+
+	for term, posting := range term_postings {
+		for _, occurences := range posting {
+			term_frequency := (1 + math.Log10(float64(len(occurences))))
+			inv_doc_frequency := math.Log10(float64(N / len(posting)))
+			weight := term_frequency * inv_doc_frequency
+			scores_map[term] = scores_map[term] + weight
+		}
+
+	}
+
+	// sort the documents based on the weight
+	terms := make([]string, 0, len(scores_map))
+	for term := range scores_map {
+		terms = append(terms, term)
+	}
+	sort.SliceStable(terms, func(i, j int) bool {
+		return scores_map[terms[i]] > scores_map[terms[j]]
+	})
+
+	res := terms[0:n_t]
+
+	new_query := search + " " + strings.Join(res, " ")
+
+	return BM25RankedSearchComplete(new_query, stopwords, db)
 
 }

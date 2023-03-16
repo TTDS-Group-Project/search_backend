@@ -259,6 +259,9 @@ func HydrateDocIDListFast(list *[]string, db *sql.DB) *[]ArticleData {
 			log.Println("ERROR scanning row in HydrateDocIDListFast skipping")
 			continue
 		}
+		if ad.Date == "1900-01-01T00:00:00Z" {
+			ad.Date = "N/A"
+		}
 		ad_map[ad.Id] = ad
 	}
 
